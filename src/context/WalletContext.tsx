@@ -2,6 +2,17 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { toast } from "sonner";
 
+// Add TypeScript interface for window.ethereum
+interface Window {
+  ethereum?: any;
+}
+
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
 interface WalletContextType {
   account: string | null;
   connectWallet: () => Promise<void>;
