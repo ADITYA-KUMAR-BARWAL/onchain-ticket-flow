@@ -1,4 +1,3 @@
-
 import { TicketContract, TicketInfo } from "../interfaces/TicketContract";
 
 // Mock data
@@ -149,5 +148,33 @@ export const mockTicketContract: TicketContract = {
     };
     
     return true;
+  },
+  
+  // Add the missing mintNFT method
+  mintNFT: async (name: string, event: string, price: string): Promise<string | null> => {
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    const connectedAccount = (window as any).ethereum?.selectedAddress;
+    if (!connectedAccount) return null;
+    
+    // Generate a new unique ID (in a real implementation this would be the NFT token ID)
+    const newId = (mockTickets.length + 1).toString();
+    
+    // Create the new ticket
+    const newTicket: TicketInfo = {
+      id: newId,
+      name,
+      event,
+      price,
+      owner: connectedAccount,
+      isForSale: false,
+      resalePrice: null,
+      tokenURI: `https://example.com/metadata/${newId}`
+    };
+    
+    // Add to our mock data
+    mockTickets.push(newTicket);
+    return newId;
   }
 };
