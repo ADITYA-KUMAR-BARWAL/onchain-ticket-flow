@@ -19,17 +19,73 @@ interface WalletContextType {
   disconnectWallet: () => void;
   isConnected: boolean;
   isConnecting: boolean;
+  networkId: number | null;
+  switchNetwork: (chainId: string) => Promise<boolean>;
 }
+
+// Networks
+export const SUPPORTED_NETWORKS = {
+  ETHEREUM_MAINNET: { chainId: '0x1', name: 'Ethereum Mainnet' },
+  GOERLI: { chainId: '0x5', name: 'Goerli Testnet' },
+  SEPOLIA: { chainId: '0xaa36a7', name: 'Sepolia Testnet' },
+  POLYGON: { chainId: '0x89', name: 'Polygon Mainnet' },
+  MUMBAI: { chainId: '0x13881', name: 'Mumbai Testnet' }
+};
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [networkId, setNetworkId] = useState<number | null>(null);
 
   // Check if MetaMask is installed
   const checkIfMetaMaskIsInstalled = () => {
     return typeof window !== 'undefined' && !!window.ethereum;
+  };
+
+  // Get current network
+  const getNetwork = async () => {
+    if (!checkIfMetaMaskIsInstalled()) return null;
+    
+    try {
+      const { ethereum } = window as any;
+      const chainId = await ethereum.request({ method: 'eth_chainId' });
+      return parseInt(chainId, 16);
+    } catch (error) {
+      console.error("Error getting network:", error);
+      return null;
+    }
+  };
+
+  // Switch to a different network
+  const switchNetwork = async (chainId: string): Promise<boolean> => {
+    if (!checkIfMetaMaskIsInstalled()) {
+      toast.error("MetaMask is not installed");
+      return false;
+    }
+    
+    try {
+      const { ethereum } = window as any;
+      await ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId }],
+      });
+      
+      // Update the networkId state after switching
+      const newNetworkId = await getNetwork();
+      setNetworkId(newNetworkId);
+      return true;
+    } catch (error: any) {
+      // This error code indicates the chain has not been added to MetaMask
+      if (error.code === 4902) {
+        toast.error("This network is not available in your MetaMask. Please add it manually.");
+      } else {
+        console.error("Error switching network:", error);
+        toast.error("Failed to switch network");
+      }
+      return false;
+    }
   };
 
   // Connect to MetaMask wallet
@@ -47,6 +103,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (accounts.length > 0) {
         setAccount(accounts[0]);
         localStorage.setItem('walletConnected', 'true');
+        
+        // Get and set the network ID
+        const currentNetworkId = await getNetwork();
+        setNetworkId(currentNetworkId);
+        
         toast.success("Wallet connected successfully!");
       }
     } catch (error) {
@@ -76,6 +137,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           
           if (accounts.length > 0) {
             setAccount(accounts[0]);
+            
+            // Get and set the network ID
+            const currentNetworkId = await getNetwork();
+            setNetworkId(currentNetworkId);
           } else {
             localStorage.removeItem('walletConnected');
           }
@@ -89,7 +154,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     checkConnection();
   }, []);
 
-  // Listen for account changes
+  // Listen for account and network changes
   useEffect(() => {
     if (checkIfMetaMaskIsInstalled()) {
       const { ethereum } = window as any;
@@ -101,11 +166,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           disconnectWallet();
         }
       };
+      
+      const handleChainChanged = (chainId: string) => {
+        setNetworkId(parseInt(chainId, 16));
+        // Refresh the page to ensure all state is updated properly
+        window.location.reload();
+      };
 
       ethereum?.on('accountsChanged', handleAccountsChanged);
+      ethereum?.on('chainChanged', handleChainChanged);
       
       return () => {
         ethereum?.removeListener('accountsChanged', handleAccountsChanged);
+        ethereum?.removeListener('chainChanged', handleChainChanged);
       };
     }
   }, []);
@@ -117,7 +190,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         connectWallet,
         disconnectWallet,
         isConnected: !!account,
-        isConnecting
+        isConnecting,
+        networkId,
+        switchNetwork
       }}
     >
       {children}

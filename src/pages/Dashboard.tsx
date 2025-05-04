@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
@@ -6,14 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SellTicketForm, IssueTicketForm } from '@/components/dashboard/TicketForm';
 import TicketCard from '@/components/dashboard/TicketCard';
-import { useWallet } from '@/context/WalletContext';
+import { useWallet, SUPPORTED_NETWORKS } from '@/context/WalletContext';
 import { mockTicketContract } from '@/services/mockContract';
+import { ethersTicketContract } from '@/services/ethersContract';
 import { TicketInfo } from '@/interfaces/TicketContract';
 import { toast } from "sonner";
-import { ShoppingBag, Plus, Ticket, Wallet, TicketSlash } from 'lucide-react';
+import { ShoppingBag, Plus, Ticket, Wallet, TicketSlash, AlertCircle } from 'lucide-react';
+
+// The network we want to use for our app
+const PREFERRED_NETWORK = SUPPORTED_NETWORKS.SEPOLIA;
 
 const Dashboard = () => {
-  const { isConnected, account } = useWallet();
+  const { isConnected, account, networkId, switchNetwork } = useWallet();
   const navigate = useNavigate();
   
   const [myTickets, setMyTickets] = useState<TicketInfo[]>([]);
@@ -23,6 +26,11 @@ const Dashboard = () => {
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCorrectNetwork, setIsCorrectNetwork] = useState(true);
+
+  // Use either the mock contract or the real implementation
+  // In a production app, you would only use the real implementation
+  const ticketContract = process.env.NODE_ENV === 'development' ? mockTicketContract : ethersTicketContract;
 
   useEffect(() => {
     if (!isConnected) {
@@ -30,16 +38,30 @@ const Dashboard = () => {
       return;
     }
     
-    loadData();
-  }, [isConnected, account, navigate]);
+    // Check if we're on the correct network
+    if (networkId && parseInt(PREFERRED_NETWORK.chainId, 16) !== networkId) {
+      setIsCorrectNetwork(false);
+    } else {
+      setIsCorrectNetwork(true);
+      loadData();
+    }
+  }, [isConnected, account, navigate, networkId]);
+
+  const handleSwitchNetwork = async () => {
+    const success = await switchNetwork(PREFERRED_NETWORK.chainId);
+    if (success) {
+      setIsCorrectNetwork(true);
+      loadData();
+    }
+  };
 
   const loadData = async () => {
     setIsLoading(true);
     try {
       if (account) {
         const [myTicketsData, forSaleData] = await Promise.all([
-          mockTicketContract.getMyTickets(account),
-          mockTicketContract.getTicketsForSale()
+          ticketContract.getMyTickets(account),
+          ticketContract.getTicketsForSale()
         ]);
         setMyTickets(myTicketsData);
         setTicketsForSale(forSaleData.filter(ticket => ticket.owner.toLowerCase() !== account.toLowerCase()));
@@ -60,7 +82,7 @@ const Dashboard = () => {
   const handleCancelSale = async (ticketId: string) => {
     setIsProcessing(true);
     try {
-      const success = await mockTicketContract.removeFromSale(ticketId);
+      const success = await ticketContract.removeFromSale(ticketId);
       if (success) {
         toast.success('Ticket removed from sale');
         loadData();
@@ -80,7 +102,7 @@ const Dashboard = () => {
     
     setIsProcessing(true);
     try {
-      const success = await mockTicketContract.setTicketForSale(selectedTicketId, price);
+      const success = await ticketContract.setTicketForSale(selectedTicketId, price);
       if (success) {
         toast.success('Ticket listed for sale');
         setIsSellModalOpen(false);
@@ -99,7 +121,7 @@ const Dashboard = () => {
   const handleBuyTicket = async (ticketId: string, price: string) => {
     setIsProcessing(true);
     try {
-      const success = await mockTicketContract.buyTicket(ticketId, price);
+      const success = await ticketContract.buyTicket(ticketId, price);
       if (success) {
         toast.success('Ticket purchased successfully');
         loadData();
@@ -117,13 +139,14 @@ const Dashboard = () => {
   const handleIssueSubmit = async (name: string, event: string, price: string) => {
     setIsProcessing(true);
     try {
-      const success = await mockTicketContract.issueTicket(name, event, price);
+      // For NFT minting, we use the issueTicket method which internally calls mintNFT
+      const success = await ticketContract.issueTicket(name, event, price);
       if (success) {
-        toast.success('Ticket issued successfully');
+        toast.success('NFT Ticket minted successfully');
         setIsIssueModalOpen(false);
         loadData();
       } else {
-        toast.error('Failed to issue ticket');
+        toast.error('Failed to mint NFT ticket');
       }
     } catch (error) {
       console.error('Error issuing ticket:', error);
@@ -132,6 +155,34 @@ const Dashboard = () => {
       setIsProcessing(false);
     }
   };
+
+  // Display network warning if on wrong network
+  if (!isCorrectNetwork) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-black to-gray-900">
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1508997449629-303059a039c0?q=80&w=3270&auto=format&fit=crop&ixlib=rb-4.0.3')] bg-cover bg-center opacity-10 z-0"></div>
+        <div className="relative z-10">
+          <Navbar />
+          
+          <main className="container mx-auto py-16 px-4 flex flex-col items-center justify-center">
+            <div className="bg-gray-900/80 p-8 rounded-lg border border-red-500 max-w-md w-full text-center">
+              <AlertCircle className="mx-auto h-16 w-16 text-red-500 mb-4" />
+              <h2 className="text-2xl font-bold mb-2">Wrong Network</h2>
+              <p className="text-gray-300 mb-6">
+                Please switch to {PREFERRED_NETWORK.name} to use this application.
+              </p>
+              <Button 
+                onClick={handleSwitchNetwork}
+                className="w-full bg-ticket-gradient hover:bg-ticket-purple-dark"
+              >
+                Switch Network
+              </Button>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black to-gray-900">

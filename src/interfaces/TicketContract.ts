@@ -1,6 +1,5 @@
 
-// This is a mock interface for the smart contract
-// In a real application, you would generate this from your actual smart contract ABI
+// This interface represents the smart contract interaction for NFT tickets
 
 export interface TicketInfo {
   id: string;
@@ -10,6 +9,7 @@ export interface TicketInfo {
   owner: string;
   isForSale: boolean;
   resalePrice: string | null;
+  tokenURI?: string;
 }
 
 export interface TicketContract {
@@ -20,4 +20,5 @@ export interface TicketContract {
   issueTicket: (name: string, event: string, price: string) => Promise<boolean>;
   setTicketForSale: (id: string, price: string) => Promise<boolean>;
   removeFromSale: (id: string) => Promise<boolean>;
+  mintNFT: (name: string, event: string, price: string) => Promise<string | null>;
 }
