@@ -29,9 +29,9 @@ const TICKET_NFT_ABI = [
 const CONTRACT_ADDRESS = "0x123..."; // Replace with actual contract address in production
 
 export class EthersTicketContract implements TicketContract {
-  private provider: ethers.providers.Web3Provider | null = null;
+  private provider: ethers.BrowserProvider | null = null;
   private contract: ethers.Contract | null = null;
-  private signer: ethers.Signer | null = null;
+  private signer: ethers.JsonRpcSigner | null = null;
 
   constructor() {
     this.initializeProvider();
@@ -40,8 +40,8 @@ export class EthersTicketContract implements TicketContract {
   private async initializeProvider() {
     if (typeof window.ethereum !== 'undefined') {
       try {
-        this.provider = new ethers.providers.Web3Provider(window.ethereum);
-        this.signer = this.provider.getSigner();
+        this.provider = new ethers.BrowserProvider(window.ethereum);
+        this.signer = await this.provider.getSigner();
         this.contract = new ethers.Contract(CONTRACT_ADDRESS, TICKET_NFT_ABI, this.signer);
       } catch (error) {
         console.error("Failed to initialize Ethereum provider:", error);
@@ -59,15 +59,15 @@ export class EthersTicketContract implements TicketContract {
     return true;
   }
 
-  private weiToEth(weiValue: ethers.BigNumber): string {
-    return ethers.utils.formatEther(weiValue);
+  private weiToEth(weiValue: bigint): string {
+    return ethers.formatEther(weiValue);
   }
 
-  private ethToWei(ethValue: string): ethers.BigNumber {
-    return ethers.utils.parseEther(ethValue);
+  private ethToWei(ethValue: string): bigint {
+    return ethers.parseEther(ethValue);
   }
 
-  private tokenIdToString(tokenId: ethers.BigNumber): string {
+  private tokenIdToString(tokenId: bigint): string {
     return tokenId.toString();
   }
 
@@ -98,7 +98,7 @@ export class EthersTicketContract implements TicketContract {
 
       const tokenIds = await this.contract!.getAllTickets();
       
-      const ticketsPromises = tokenIds.map((id: ethers.BigNumber) => 
+      const ticketsPromises = tokenIds.map((id: bigint) => 
         this.getTicketFromChain(this.tokenIdToString(id))
       );
       
@@ -131,7 +131,7 @@ export class EthersTicketContract implements TicketContract {
       
       const forSaleIds = await this.contract!.getTicketsForSale();
       
-      const ticketsPromises = forSaleIds.map((id: ethers.BigNumber) => 
+      const ticketsPromises = forSaleIds.map((id: bigint) => 
         this.getTicketFromChain(this.tokenIdToString(id))
       );
       
